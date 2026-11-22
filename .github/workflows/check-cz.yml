@@ -1,0 +1,42 @@
+name: Kontrola CZ playlistu
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalace ffmpeg a iptv-checker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm install -g iptv-checker@0.30.3
+
+      - name: Kontrola kanálů
+        run: |
+          iptv-checker --timeout 15000 --parallel 5 --output checked \
+            https://iptv-org.github.io/iptv/countries/cz.m3u || true
+          test -s checked/online.m3u
+          test "$(grep -c '^#EXTINF' checked/online.m3u)" -ge 5
+          cp checked/online.m3u cz_online.m3u
+
+      - name: Uložení výsledku
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cz_online.m3u
+          git diff --cached --quiet || git commit -m "Aktualizace cz_online.m3u"
+          git push
